@@ -4203,6 +4203,13 @@ function downloadTextFile(text, filename, mimeType = 'application/json') {
         }
     }
 
+    if (fsaExportDirHandle) {
+        writeTextToFsaExportDir(filename, content, mimeType).then((ok) => {
+            if (!ok) showToast('写入所选文件夹失败，已改到默认下载');
+        }).catch(() => {});
+        return 'folder';
+    }
+
     const blob = new Blob([content], { type: 'application/json;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -29143,10 +29150,231 @@ function registerStImportEntries() {
     }
 }
 
+function registerAllBootEntries() {
+    registerStImportEntries();
+    registerExportLocationEntries();
+    loadFsaExportDir().then(() => refreshExportLocationRow()).catch(() => {});
+}
+
 if (typeof document !== 'undefined') {
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', registerStImportEntries);
+        document.addEventListener('DOMContentLoaded', registerAllBootEntries);
     } else {
-        registerStImportEntries();
+        registerAllBootEntries();
     }
+}
+
+
+// ============================================================
+// 导出位置：选一次文件夹，之后默认导到那里
+// ============================================================
+let fsaExportDirHandle = null; // FileSystemDirectoryHandle
+let fsaExportDirName = '';
+const EXPORT_PREF_KEY = 'vechat_export_folder_pref';
+const FSA_IDB_DB = 'vechat_fsa';
+const FSA_IDB_STORE = 'kv';
+
+function hasNativeExportFolderApi() {
+    return !!(window.AndroidBridge && typeof window.AndroidBridge.chooseExportFolder === 'function');
+}
+
+function readExportPref() {
+    try {
+        const raw = localStorage.getItem(EXPORT_PREF_KEY);
+        if (raw) { const p = JSON.parse(raw); return p && typeof p === 'object' ? p : null; }
+    } catch (e) {}
+    return null;
+}
+
+function writeExportPref(pref) {
+    try {
+        if (pref) localStorage.setItem(EXPORT_PREF_KEY, JSON.stringify(pref));
+        else localStorage.removeItem(EXPORT_PREF_KEY);
+    } catch (e) {}
+}
+
+function openFsaDb() {
+    return new Promise((resolve) => {
+        try {
+            if (typeof indexedDB === 'undefined') { resolve(null); return; }
+            const req = indexedDB.open(FSA_IDB_DB, 1);
+            req.onupgradeneeded = () => {
+                const db = req.result;
+                if (!db.objectStoreNames.contains(FSA_IDB_STORE)) db.createObjectStore(FSA_IDB_STORE);
+            };
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => resolve(null);
+        } catch (e) { resolve(null); }
+    });
+}
+
+async function persistFsaExportDir(handle) {
+    const db = await openFsaDb();
+    if (!db) return;
+    try {
+        await new Promise((resolve, reject) => {
+            const tx = db.transaction(FSA_IDB_STORE, 'readwrite');
+            tx.objectStore(FSA_IDB_STORE).put(handle, 'exportDir');
+            tx.oncomplete = resolve;
+            tx.onerror = () => reject(tx.error);
+        });
+    } catch (e) {}
+}
+
+async function loadFsaExportDir() {
+    try {
+        const db = await openFsaDb();
+        if (!db) return;
+        const handle = await new Promise((resolve, reject) => {
+            const tx = db.transaction(FSA_IDB_STORE, 'readonly');
+            const req = tx.objectStore(FSA_IDB_STORE).get('exportDir');
+            req.onsuccess = () => resolve(req.result || null);
+            req.onerror = () => reject(req.error);
+        });
+        if (handle && typeof handle.queryPermission === 'function') {
+            if ((await handle.queryPermission({ mode: 'readwrite' })) === 'granted') {
+                fsaExportDirHandle = handle;
+                try { fsaExportDirName = handle.name || '所选文件夹'; } catch (e) {}
+                writeExportPref({ mode: 'fsa', name: fsaExportDirName });
+                return true;
+            }
+        }
+        // 授权失效：清掉
+        fsaExportDirHandle = null;
+        fsaExportDirName = '';
+        const pref = readExportPref();
+        if (pref && pref.mode === 'fsa') writeExportPref(null);
+    } catch (e) {}
+    return false;
+}
+
+function getExportFolderDisplayName() {
+    const pref = readExportPref();
+    if (pref && pref.mode === 'native') {
+        return String(pref.name || '所选文件夹');
+    }
+    if (fsaExportDirHandle) return fsaExportDirName || '所选文件夹';
+    return '';
+}
+
+function getExportFolderMode() {
+    if (hasNativeExportFolderApi()) {
+        try {
+            if (window.AndroidBridge.hasExportFolder && window.AndroidBridge.hasExportFolder()) return 'native';
+        } catch (e) {}
+    }
+    if (fsaExportDirHandle) return 'fsa';
+    return 'none';
+}
+
+async function refreshExportLocationRow() {
+    const valueEl = document.getElementById('export-location-value');
+    const clearCell = document.getElementById('export-location-clear-cell');
+    if (!valueEl) return;
+    const mode = getExportFolderMode();
+    if (mode === 'none') {
+        valueEl.textContent = hasNativeExportFolderApi() ? '默认（下载/VEchat）' : '默认下载位置';
+        if (clearCell) clearCell.style.display = 'none';
+        return;
+    }
+    let name = '';
+    if (mode === 'native') {
+        try { name = String(window.AndroidBridge.getExportFolderName?.() || '').trim() || '所选文件夹'; } catch (e) { name = ''; }
+    } else {
+        name = getExportFolderDisplayName();
+    }
+    valueEl.textContent = name || '所选文件夹';
+    if (clearCell) clearCell.style.display = '';
+}
+
+async function pickExportFolder() {
+    // 安卓原生：SAF 文件夹选择器
+    if (hasNativeExportFolderApi()) {
+        try {
+            const already = getExportFolderMode() === 'native';
+            window.AndroidBridge.chooseExportFolder();
+            showToast(already ? '请在弹出的目录中选择新的导出文件夹' : '请选择一个文件夹作为导出位置');
+            return;
+        } catch (e) {}
+    }
+    // 桌面浏览器：File System Access
+    if (typeof window.showDirectoryPicker === 'function') {
+        try {
+            const handle = await window.showDirectoryPicker({ mode: 'readwrite' });
+            fsaExportDirHandle = handle;
+            fsaExportDirName = handle.name || '所选文件夹';
+            writeExportPref({ mode: 'fsa', name: fsaExportDirName });
+            await persistFsaExportDir(handle);
+            refreshExportLocationRow();
+            showToast(`已设为导出文件夹：${fsaExportDirName}`);
+        } catch (err) {
+            if (err && err.name === 'AbortError') return;
+            showToast('选择文件夹失败');
+        }
+        return;
+    }
+    showToast('当前环境不支持自选文件夹（安卓 App 或电脑 Chrome/Edge 可用）');
+}
+
+async function clearExportFolder() {
+    if (hasNativeExportFolderApi()) {
+        try {
+            window.AndroidBridge.clearExportFolder?.();
+            showToast('已恢复默认导出位置');
+            refreshExportLocationRow();
+            return;
+        } catch (e) {}
+    }
+    if (fsaExportDirHandle) {
+        fsaExportDirHandle = null;
+        fsaExportDirName = '';
+        writeExportPref(null);
+        try {
+            const db = await openFsaDb();
+            if (db) {
+                await new Promise((resolve) => {
+                    const tx = db.transaction(FSA_IDB_STORE, 'readwrite');
+                    tx.objectStore(FSA_IDB_STORE).delete('exportDir');
+                    tx.oncomplete = resolve;
+                    tx.onerror = resolve;
+                });
+            }
+        } catch (e) {}
+        refreshExportLocationRow();
+        showToast('已恢复默认导出位置');
+    }
+}
+
+async function writeTextToFsaExportDir(filename, content, mimeType) {
+    if (!fsaExportDirHandle) return false;
+    try {
+        const fileHandle = await fsaExportDirHandle.getFileHandle(filename, { create: true });
+        const writable = await fileHandle.createWritable();
+        await writable.write(content);
+        await writable.close();
+        return true;
+    } catch (e) {
+        return false;
+    }
+}
+
+function registerExportLocationEntries() {
+    const cell = document.getElementById('export-location-cell');
+    const clearCell = document.getElementById('export-location-clear-cell');
+    if (cell) cell.addEventListener('click', pickExportFolder);
+    if (clearCell) clearCell.addEventListener('click', clearExportFolder);
+    // 打开设置页时刷新显示
+    const settingsEntry = document.getElementById('settings-entry');
+    if (settingsEntry) settingsEntry.addEventListener('click', () => { setTimeout(refreshExportLocationRow, 60); });
+    // 原生选完文件夹后回调刷新
+    if (typeof window !== 'undefined') {
+        window.__onExportFolderChanged = () => {
+            try {
+                const name = String(window.AndroidBridge?.getExportFolderName?.() || '').trim();
+                if (name) writeExportPref({ mode: 'native', name });
+            } catch (e) {}
+            refreshExportLocationRow();
+        };
+    }
+    refreshExportLocationRow();
 }

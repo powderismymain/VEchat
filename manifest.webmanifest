@@ -1,1 +1,17 @@
-{"name":"VEchat","short_name":"VEchat","start_url":"./index.html","scope":"./","display":"standalone","background_color":"#ededed","theme_color":"#ededed","icons":[{"src":"icon.png","sizes":"1080x1080","type":"image/png","purpose":"any maskable"}]}
+{
+  "name": "VEchat",
+  "short_name": "VEchat",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#ededed",
+  "theme_color": "#ededed",
+  "icons": [
+    {
+      "src": "icon.png",
+      "sizes": "1080x1080",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

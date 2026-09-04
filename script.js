@@ -12420,7 +12420,6 @@ function initDiscoverPage() {
             }
         }
         bindPromptPreviewEvents();
-        switchPromptCategory(isGroupSession(promptTarget) ? 'group' : 'chat');
         refreshPromptPreview();
     });
 
@@ -12539,10 +12538,8 @@ function initDiscoverPage() {
 
     document.getElementById('summary-open-prompt-editor-btn')?.addEventListener('click', () => {
         hidePage('summary-settings-page');
-        showPage('prompt-page');
         document.getElementById('prompt-inject-entry')?.click();
-        switchPromptCategory('summary');
-        refreshPromptPreview();
+        openPromptDetail('summary', { refresh: true });
     });
 
     // 返回
@@ -12634,31 +12631,46 @@ function initWorldbookList() {
     list.innerHTML = '';
 
     if (State.worldbooks.length === 0) {
-        list.innerHTML = '<div style="padding: 20px; text-align: center; color: #888;">暂无世界书，点击右上角添加</div>';
+        list.innerHTML = '<div class="worldbook-empty"><i class="fas fa-book-open"></i><p>还没有世界书</p><span>点右上角 + 新建一本，把世界观/角色设定整理进来</span></div>';
         return;
     }
 
+    const coverColors = ['#07c160', '#2782d7', '#fa9d3b', '#9c6ade', '#e05d83', '#12b8a6', '#576b95', '#e67e22'];
     State.worldbooks.forEach((book, index) => {
         const item = document.createElement('div');
-        item.className = 'worldbook-item';
+        item.className = 'worldbook-card';
+        const title = String(book.title || '未命名').trim();
+        const glyph = title.slice(0, 1) || '书';
+        const coverColor = coverColors[index % coverColors.length];
+        const enabledCount = (Array.isArray(book.entries) ? book.entries : []).filter((e) => e && e.enabled !== false).length;
+        const totalCount = (Array.isArray(book.entries) ? book.entries : []).length;
         item.innerHTML = `
-            <div class="worldbook-title">${escapeHtml(book.title || '未命名')}</div>
-            <div class="worldbook-desc">${escapeHtml(book.desc?.substring(0, 50) || '无简介')}...</div>
-            <div class="worldbook-meta" style="font-size:12px; color:#999; margin-top:4px;">包含 ${book.entries?.length || 0} 个设定条目</div>
+            <div class="worldbook-card-cover" style="background:linear-gradient(135deg, ${coverColor}, ${coverColor}cc);">${escapeHtml(glyph)}</div>
+            <div class="worldbook-card-body">
+                <div class="worldbook-card-title">${escapeHtml(title)}</div>
+                <div class="worldbook-card-desc">${escapeHtml(book.desc || '暂无简介')}</div>
+                <div class="worldbook-card-meta"><span class="wb-dot"></span>${totalCount} 个条目 · ${enabledCount} 启用</div>
+            </div>
+            <div class="worldbook-card-actions">
+                <span class="worldbook-card-edit" role="button" aria-label="编辑" tabindex="0"><i class="fas fa-pen"></i></span>
+                <i class="fas fa-chevron-right worldbook-arrow"></i>
+            </div>
         `;
-        // 点击列表项进入条目详情页
-        item.addEventListener('click', () => openWorldbookEntries(book));
-        
-        // 增加一个编辑按钮（例如长按或右侧小按钮，这里用一个简单的编辑图标）
-        const editBtn = document.createElement('span');
-        editBtn.innerHTML = '<i class="fas fa-edit"></i>';
-        editBtn.style.cssText = 'float:right; padding:10px; color:#07c160; cursor:pointer;';
+        // 点击卡片主体进入条目详情
+        const editBtn = item.querySelector('.worldbook-card-edit');
         editBtn.addEventListener('click', (e) => {
-            e.stopPropagation(); // 阻止触发进入条目详情的事件
+            e.stopPropagation();
             openWorldbookModal(index);
         });
-        item.insertBefore(editBtn, item.firstChild);
-        
+        editBtn.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                e.stopPropagation();
+                openWorldbookModal(index);
+            }
+        });
+        item.addEventListener('click', () => openWorldbookEntries(book));
+
         list.appendChild(item);
     });
 }
@@ -26795,9 +26807,14 @@ function getAnyStoredImageAssetKey(value) {
 }
 
 function getStoredImageSourceSync(payload) {
-    const direct = String(payload?.content || '').trim();
-    if (direct && !/^blob:\s*$/i.test(direct)) return direct;
     const assetKey = getStoredImageAssetKey(payload);
+    if (assetKey) {
+        const runtimeUrl = Storage.getMediaRuntimeUrl(assetKey);
+        if (runtimeUrl) return runtimeUrl;
+    }
+    const direct = String(payload?.content || '').trim();
+    // blob: 只在当前会话有效，重进/重启后已失效，忽略以免挡住本地资源的回退
+    if (direct && !/^blob:/i.test(direct)) return direct;
     return assetKey ? Storage.getMediaRuntimeUrl(assetKey) : '';
 }
 
@@ -26809,14 +26826,19 @@ function getRenderableStoredImageSourceSync(value) {
 }
 
 async function getStoredImageSource(payload, options = {}) {
-    const direct = String(payload?.content || '').trim();
-    if (direct && !/^blob:\s*$/i.test(direct)) return direct;
     const assetKey = getStoredImageAssetKey(payload);
-    if (!assetKey) return '';
-    if (options.forModel) {
-        return await Storage.getMediaDataUrl(assetKey);
+    if (assetKey) {
+        if (options.forModel) {
+            return await Storage.getMediaDataUrl(assetKey);
+        }
+        const runtimeUrl = Storage.getMediaRuntimeUrl(assetKey);
+        if (runtimeUrl) return runtimeUrl;
+        return await Storage.hydrateMediaUrl(assetKey);
     }
-    return await Storage.hydrateMediaUrl(assetKey);
+    const direct = String(payload?.content || '').trim();
+    // blob: 只在当前会话有效，失效后忽略以免挡住本地资源的回退
+    if (direct && !/^blob:/i.test(direct)) return direct;
+    return '';
 }
 
 function hydrateStoredImageElement(imgEl, payload) {
@@ -26845,6 +26867,7 @@ function applyStoredBackgroundToElement(el, value, options = {}) {
     el.style.backgroundPosition = '';
     el.style.backgroundRepeat = '';
     delete el.dataset.bgMediaKey;
+    delete el.dataset.bgMediaHydrating;
     if (src) {
         el.style.backgroundImage = `url("${src}")`;
         el.style.backgroundSize = 'cover';
@@ -26857,7 +26880,25 @@ function applyStoredBackgroundToElement(el, value, options = {}) {
         el.style.backgroundSize = 'cover';
         el.style.backgroundPosition = 'center';
         el.style.backgroundRepeat = 'no-repeat';
+        // 立即尝试异步补图：重启/重进后 runtime URL 已清空，必须重新从 IndexedDB 取回
+        hydrateBgMediaElement(el);
     }
+}
+
+function hydrateBgMediaElement(el) {
+    if (!el || el.dataset.bgMediaHydrating === '1') return;
+    const key = String(el.dataset.bgMediaKey || '').trim();
+    if (!key) return;
+    el.dataset.bgMediaHydrating = '1';
+    Storage.hydrateMediaUrl(key).then((src) => {
+        if (!src || !el.isConnected) return;
+        el.style.backgroundImage = `url("${src}")`;
+        el.style.backgroundSize = 'cover';
+        el.style.backgroundPosition = 'center';
+        el.style.backgroundRepeat = 'no-repeat';
+    }).finally(() => {
+        if (el.isConnected) delete el.dataset.bgMediaHydrating;
+    });
 }
 
 function hydrateMediaAssetRoot(root = document) {
@@ -26871,18 +26912,7 @@ function hydrateMediaAssetRoot(root = document) {
         }
     });
     root.querySelectorAll('[data-bg-media-key]').forEach((el) => {
-        const key = String(el.dataset.bgMediaKey || '').trim();
-        if (!key || el.dataset.bgMediaHydrating === '1') return;
-        el.dataset.bgMediaHydrating = '1';
-        Storage.hydrateMediaUrl(key).then((src) => {
-            if (!src || !el.isConnected) return;
-            el.style.backgroundImage = `url("${src}")`;
-            el.style.backgroundSize = 'cover';
-            el.style.backgroundPosition = 'center';
-            el.style.backgroundRepeat = 'no-repeat';
-        }).finally(() => {
-            if (el.isConnected) delete el.dataset.bgMediaHydrating;
-        });
+        hydrateBgMediaElement(el);
     });
 }
 
@@ -27388,16 +27418,37 @@ function initWorldbookEntriesList() {
     if (!book) return;
 
     if (!book.entries || book.entries.length === 0) {
-        list.innerHTML = '<div style="padding: 20px; text-align: center; color: #888;">暂无设定条目，点击右上角添加</div>';
+        list.innerHTML = '<div class="worldbook-empty"><i class="fas fa-puzzle-piece"></i><p>这本世界书还没有条目</p><span>点右上角 + 添加第一条设定，填触发词与内容</span></div>';
         return;
     }
 
+    const coverColors = ['#07c160', '#2782d7', '#fa9d3b', '#9c6ade', '#e05d83', '#12b8a6', '#576b95', '#e67e22'];
     book.entries.forEach((entry, index) => {
         const item = document.createElement('div');
-        item.className = 'worldbook-item';
+        item.className = 'worldbook-card' + (entry.enabled === false ? ' worldbook-card-off' : '');
+        const title = String(entry.title || '未命名').trim();
+        const glyph = title.slice(0, 1) || '条';
+        const coverColor = coverColors[index % coverColors.length];
+        const keywords = Array.isArray(entry.keywords) ? entry.keywords : [];
+        const chips = keywords.slice(0, 3).map((kw) => `<span class="wb-chip">${escapeHtml(String(kw || '').slice(0, 12))}</span>`).join('');
+        const moreChips = keywords.length > 3 ? `<span class="wb-chip wb-chip-more">+${keywords.length - 3}</span>` : '';
+        const preview = String(entry.content || '').replace(/\s+/g, ' ').slice(0, 60);
+        const badges = [];
+        if (entry.isAlwaysOn) badges.push('<span class="wb-badge wb-badge-always">常驻</span>');
+        if (entry.caseSensitive) badges.push('<span class="wb-badge wb-badge-case">大小写</span>');
+        if (entry.enabled === false) badges.push('<span class="wb-badge wb-badge-off">停用</span>');
+        if (entry.priority && entry.priority !== 50) badges.push(`<span class="wb-badge wb-badge-priority">优先 ${escapeHtml(entry.priority)}</span>`);
         item.innerHTML = `
-            <div class="worldbook-title">${escapeHtml(entry.title || '未命名')}</div>
-            <div class="worldbook-desc">${escapeHtml(entry.content?.substring(0, 50) || '无内容')}...</div>
+            <div class="worldbook-card-cover" style="background:linear-gradient(135deg, ${coverColor}, ${coverColor}cc);">${escapeHtml(glyph)}</div>
+            <div class="worldbook-card-body">
+                <div class="worldbook-card-title">
+                    ${escapeHtml(title)}
+                    ${badges.length ? `<span class="wb-badges">${badges.join('')}</span>` : ''}
+                </div>
+                ${chips || moreChips ? `<div class="wb-chips">${chips}${moreChips}</div>` : ''}
+                <div class="worldbook-card-desc">${escapeHtml(preview || '（无内容）')}</div>
+            </div>
+            <i class="fas fa-chevron-right worldbook-arrow"></i>
         `;
         item.addEventListener('click', () => openWorldbookEntryModal(index));
         list.appendChild(item);
@@ -29378,3 +29429,152 @@ function registerExportLocationEntries() {
     }
     refreshExportLocationRow();
 }
+
+
+// ============================================================
+// 提示词注入：两级导航（菜单 → 详情页，条目折叠 + 铅笔编辑）
+// ============================================================
+const PROMPT_CATEGORY_TITLES = {
+    chat: '聊天', proactive: '主动', moments: '朋友圈', call: '通话',
+    group: '群聊', summary: '总结', theater: '小剧场', preview: '预览'
+};
+let promptFormMoved = false;
+
+function ensurePromptFormMoved() {
+    if (promptFormMoved) return true;
+    const form = document.getElementById('prompt-form') || document.querySelector('.prompt-form');
+    const body = document.getElementById('prompt-detail-body');
+    if (form && body) {
+        body.appendChild(form);
+        promptFormMoved = true;
+    }
+    return promptFormMoved;
+}
+
+function openPromptDetail(category, opts = {}) {
+    ensurePromptFormMoved();
+    ensurePromptRowsDecorated();
+    const cat = PROMPT_CATEGORY_TITLES[category] ? category : 'chat';
+    const titleEl = document.getElementById('prompt-detail-title');
+    if (titleEl) titleEl.textContent = `提示词 · ${PROMPT_CATEGORY_TITLES[cat]}`;
+    document.querySelectorAll('#prompt-detail-body .prompt-category-panel').forEach((panel) => {
+        const on = String(panel.dataset.category || '') === cat;
+        panel.classList.toggle('active', on);
+        panel.style.display = on ? '' : 'none';
+    });
+    collapsePromptRows();
+    showPage('prompt-detail-page');
+    if (opts.refresh && typeof refreshPromptPreview === 'function') {
+        try { refreshPromptPreview(); } catch (err) { /* ignore */ }
+    }
+}
+
+function collapsePromptRows() {
+    document.querySelectorAll('#prompt-detail-body .prompt-item').forEach((row) => {
+        row.classList.remove('expanded');
+        const body = row.querySelector('.prompt-item-body');
+        if (body) body.hidden = true;
+        updatePromptRowPreview(row);
+    });
+}
+
+function updatePromptRowPreview(row) {
+    const prevEl = row.querySelector('.prompt-row-preview');
+    if (!prevEl) return;
+    const control = row.querySelector('.prompt-item-body textarea, .prompt-item-body input, .prompt-item-body select');
+    let txt = '（空）';
+    if (control) {
+        const v = String(control.value || '').trim();
+        if (v) {
+            const first = (v.split('\n').map((s) => s.trim()).find(Boolean)) || v;
+            txt = first.length > 46 ? first.slice(0, 46) + '…' : first;
+        }
+    }
+    prevEl.textContent = txt;
+}
+
+const PROMPT_PENCIL_SVG = '<svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M4 20 L4 16.5 L16.5 4 A2.2 2.2 0 0 1 19.5 7 L7 19.5 L4 20 Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M14.5 6 L18 9.5" stroke="currentColor" stroke-width="1.7"/></svg>';
+
+function ensurePromptRowsDecorated() {
+    if (ensurePromptRowsDecorated._done) return;
+    ensurePromptRowsDecorated._done = true;
+    const form = document.getElementById('prompt-form') || document.querySelector('.prompt-form');
+    if (!form) return;
+    form.querySelectorAll('.form-row').forEach((row) => {
+        if (row.classList.contains('prompt-item')) return;
+        const label = row.querySelector(':scope > label');
+        if (!label) return; // 没有 label 的行（群聊实时预览等）保持直接展示
+        row.classList.add('prompt-item');
+
+        const body = document.createElement('div');
+        body.className = 'prompt-item-body';
+        body.hidden = true;
+        Array.from(row.children).forEach((child) => {
+            if (child !== label) body.appendChild(child);
+        });
+        row.appendChild(body);
+
+        const chev = document.createElement('span');
+        chev.className = 'prompt-row-chevron';
+        chev.textContent = '›';
+        label.prepend(chev);
+
+        const prev = document.createElement('span');
+        prev.className = 'prompt-row-preview';
+        label.appendChild(prev);
+
+        const editBtn = document.createElement('button');
+        editBtn.type = 'button';
+        editBtn.className = 'prompt-row-edit';
+        editBtn.setAttribute('aria-label', '编辑这条提示词');
+        editBtn.innerHTML = PROMPT_PENCIL_SVG;
+        label.appendChild(editBtn);
+
+        const setExpanded = (expanded) => {
+            row.classList.toggle('expanded', expanded);
+            body.hidden = !expanded;
+            if (expanded) updatePromptRowPreview(row);
+        };
+
+        label.addEventListener('click', (e) => {
+            if (e.target.closest('.prompt-row-edit')) return;
+            e.preventDefault();
+            setExpanded(!row.classList.contains('expanded'));
+        });
+        editBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            setExpanded(true);
+            const control = body.querySelector('textarea, input, select');
+            if (control) {
+                setTimeout(() => {
+                    try {
+                        control.focus();
+                        if (typeof control.select === 'function') control.select();
+                    } catch (err) { /* ignore */ }
+                }, 80);
+            }
+        });
+        updatePromptRowPreview(row);
+    });
+}
+
+(function wirePromptNavigation() {
+    const run = () => {
+        ensurePromptFormMoved();
+        ensurePromptRowsDecorated();
+        document.querySelectorAll('.prompt-menu-item').forEach((item) => {
+            item.addEventListener('click', () => {
+                openPromptDetail(String(item.dataset.category || 'chat'), { refresh: true });
+            });
+        });
+        const backBtn = document.getElementById('prompt-detail-back-btn');
+        if (backBtn) {
+            backBtn.addEventListener('click', () => {
+                hidePage('prompt-detail-page');
+                showPage('prompt-page');
+            });
+        }
+    };
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run, { once: true });
+    else run();
+})();

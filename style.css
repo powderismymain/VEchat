@@ -2551,7 +2551,7 @@ textarea {
 .message-row.left .message-bubble::before {
     content: '';
     position: absolute;
-    top: 14px;
+    top: calc(var(--wx-bubble-py, 10px) + 4px);
     left: -5px;
     width: 0;
     height: 0;
@@ -2569,7 +2569,7 @@ textarea {
 .message-row.right .message-bubble::before {
     content: '';
     position: absolute;
-    top: 14px;
+    top: calc(var(--wx-bubble-py, 10px) + 4px);
     right: -5px;
     width: 0;
     height: 0;
@@ -13565,3 +13565,426 @@ button:focus-visible,
 :root[data-theme="dark"] #moments-compose-ai-roles-cell .vx-cell-title { color: #98989d !important; }
 :root[data-theme="dark"] #moments-compose-image-add { background: #232326 !important; }
 :root[data-theme="dark"] #moments-compose-image-add i { color: #6e6e73 !important; }
+
+/* ============ 夜间修复批次 2：场景灰字 / 引用 / 模型图标 / 线下弹窗 / 自定义UI 内文字 ============ */
+:root[data-theme="dark"] .scene-note-tip {
+    background: #2a2a2c;
+    color: #9b9ba3;
+}
+:root[data-theme="dark"] .message-row.left .quote-reply-bubble {
+    background-color: #232326;
+    color: #e5e5ea;
+}
+:root[data-theme="dark"] .message-row.left .quote-reply-bubble::before {
+    border-right-color: #232326;
+}
+:root[data-theme="dark"] .quote-origin-outside {
+    color: #8e8e93;
+}
+:root[data-theme="dark"] .chat-model-btn,
+:root[data-theme="dark"] .chat-mode-icon-btn {
+    color: #d1d1d6;
+}
+:root[data-theme="dark"] .chat-model-btn svg [stroke],
+:root[data-theme="dark"] .chat-mode-icon-btn svg [stroke] {
+    stroke: #d1d1d6;
+}
+:root[data-theme="dark"] .vx-save-bar {
+    background: transparent;
+    border-top-color: rgba(255, 255, 255, 0.08);
+}
+:root[data-theme="dark"] .form-row label,
+:root[data-theme="dark"] .form-group label {
+    color: #d1d1d6;
+}
+:root[data-theme="dark"] .ui-card-subtitle {
+    color: rgba(255, 255, 255, 0.72);
+}
+:root[data-theme="dark"] .ui-control-val {
+    color: #e5e5ea;
+}
+:root[data-theme="dark"] .ui-color-label,
+:root[data-theme="dark"] .ui-control-meta {
+    color: rgba(255, 255, 255, 0.72);
+}
+
+/* ============ 提示词注入：两级导航 + 折叠条目 ============ */
+.prompt-menu-list {
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.prompt-menu-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 16px;
+    background: #ffffff;
+    border-radius: 12px;
+    cursor: pointer;
+    box-shadow: 0 0.5px 2px rgba(0, 0, 0, 0.03);
+}
+.prompt-menu-item:active {
+    background: #f2f3f5;
+}
+.prompt-menu-info {
+    min-width: 0;
+    flex: 1 1 auto;
+}
+.prompt-menu-title {
+    font-size: 15px;
+    font-weight: 650;
+    color: #111;
+}
+.prompt-menu-sub {
+    font-size: 12px;
+    color: #8a8a8e;
+    margin-top: 3px;
+    line-height: 1.5;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+.prompt-menu-arrow {
+    color: #c7c7cc;
+    font-size: 15px;
+    flex: 0 0 auto;
+}
+.prompt-detail-body {
+    padding: 12px 12px 18px;
+}
+.prompt-detail-body .prompt-form {
+    padding: 0;
+}
+/* 折叠条目 */
+.prompt-form .prompt-item {
+    margin-bottom: 10px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.88);
+    overflow: hidden;
+}
+.prompt-form .prompt-item > label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    padding: 13px 12px;
+    font-size: 13.5px;
+    font-weight: 600;
+    color: #1f1f1f;
+    cursor: pointer;
+    user-select: none;
+}
+.prompt-form .prompt-row-chevron {
+    display: inline-block;
+    transition: transform 0.15s ease;
+    color: #b0b7c3;
+    font-size: 16px;
+    line-height: 1;
+    flex: 0 0 auto;
+}
+.prompt-form .prompt-item.expanded .prompt-row-chevron {
+    transform: rotate(90deg);
+}
+.prompt-form .prompt-row-preview {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 12px;
+    font-weight: 400;
+    color: #8a8a8e;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-align: left;
+}
+.prompt-form .prompt-row-edit {
+    flex: 0 0 auto;
+    width: 28px;
+    height: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: 8px;
+    background: rgba(7, 193, 96, 0.1);
+    color: #0f9d58;
+    cursor: pointer;
+    padding: 0;
+}
+.prompt-form .prompt-row-edit:active {
+    background: rgba(7, 193, 96, 0.2);
+}
+.prompt-form .prompt-item-body {
+    padding: 10px 12px 12px;
+    border-top: 0.5px solid rgba(0, 0, 0, 0.05);
+}
+.prompt-form .prompt-item-body textarea,
+.prompt-form .prompt-item-body input,
+.prompt-form .prompt-item-body select {
+    width: 100%;
+    box-sizing: border-box;
+}
+:root[data-theme="dark"] .prompt-menu-item {
+    background: #1c1c1e;
+}
+:root[data-theme="dark"] .prompt-menu-item:active {
+    background: #2a2a2c;
+}
+:root[data-theme="dark"] .prompt-menu-title {
+    color: #f2f2f7;
+}
+:root[data-theme="dark"] .prompt-menu-sub {
+    color: #8e8e93;
+}
+:root[data-theme="dark"] .prompt-menu-arrow {
+    color: #48484a;
+}
+:root[data-theme="dark"] .prompt-form .prompt-item {
+    background: rgba(28, 28, 30, 0.88);
+}
+:root[data-theme="dark"] .prompt-form .prompt-item > label {
+    color: #e5e5ea;
+}
+:root[data-theme="dark"] .prompt-form .prompt-row-chevron {
+    color: #6e6e73;
+}
+:root[data-theme="dark"] .prompt-form .prompt-row-preview {
+    color: #98989d;
+}
+:root[data-theme="dark"] .prompt-form .prompt-row-edit {
+    background: rgba(7, 193, 96, 0.18);
+    color: #64d2a1;
+}
+:root[data-theme="dark"] .prompt-form .prompt-item-body {
+    border-top-color: rgba(255, 255, 255, 0.08);
+}
+
+/* ============ 世界书：现代卡片风格 ============ */
+.worldbook-list {
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.worldbook-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px;
+    border-radius: 16px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.97), rgba(255, 255, 255, 0.92));
+    border: 0.5px solid rgba(0, 0, 0, 0.04);
+    box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
+    cursor: pointer;
+    transition: transform 0.12s ease, box-shadow 0.12s ease, opacity 0.12s ease;
+}
+.worldbook-card:active {
+    transform: scale(0.985);
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+}
+.worldbook-card-cover {
+    width: 48px;
+    height: 48px;
+    flex: 0 0 48px;
+    border-radius: 13px;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 21px;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    box-shadow: 0 5px 12px rgba(7, 193, 96, 0.18);
+    user-select: none;
+}
+.worldbook-card-body {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+.worldbook-card-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: #16181a;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+}
+.worldbook-card-desc {
+    font-size: 12.5px;
+    color: #8a8a8e;
+    margin-top: 3px;
+    line-height: 1.45;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.worldbook-card-meta {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin-top: 6px;
+    font-size: 11.5px;
+    color: #98989d;
+}
+.wb-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 999px;
+    background: #07c160;
+    display: inline-block;
+}
+.worldbook-card-actions {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+.worldbook-card-edit {
+    width: 30px;
+    height: 30px;
+    border-radius: 9px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(7, 193, 96, 0.1);
+    color: #0f9d58;
+    font-size: 12px;
+    cursor: pointer;
+}
+.worldbook-card-edit:active {
+    background: rgba(7, 193, 96, 0.22);
+}
+.worldbook-arrow {
+    color: #c7c7cc;
+    font-size: 14px;
+}
+.worldbook-card-off {
+    opacity: 0.6;
+}
+/* 条目 chips / 徽章 */
+.wb-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 7px;
+}
+.wb-chip {
+    font-size: 11px;
+    color: #0f9d58;
+    background: rgba(7, 193, 96, 0.1);
+    border: 0.5px solid rgba(7, 193, 96, 0.18);
+    border-radius: 999px;
+    padding: 2px 8px;
+    line-height: 1.4;
+    max-width: 110px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.wb-chip-more {
+    color: #8a8a8e;
+    background: rgba(0, 0, 0, 0.05);
+    border-color: rgba(0, 0, 0, 0.06);
+}
+.wb-badges {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: wrap;
+}
+.wb-badge {
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 1;
+    padding: 3px 6px;
+    border-radius: 6px;
+}
+.wb-badge-always {
+    color: #fff;
+    background: #07c160;
+}
+.wb-badge-case {
+    color: #576b95;
+    background: rgba(87, 107, 149, 0.14);
+}
+.wb-badge-off {
+    color: #8a8a8e;
+    background: rgba(0, 0, 0, 0.07);
+}
+.wb-badge-priority {
+    color: #e67e22;
+    background: rgba(230, 126, 34, 0.14);
+}
+/* 空状态 */
+.worldbook-empty {
+    padding: 56px 24px;
+    text-align: center;
+    color: #b0b7c3;
+}
+.worldbook-empty i {
+    font-size: 42px;
+    margin-bottom: 14px;
+    color: #d3d9e0;
+    display: block;
+}
+.worldbook-empty p {
+    font-size: 15px;
+    font-weight: 650;
+    color: #8a8a8e;
+    margin: 0 0 6px;
+}
+.worldbook-empty span {
+    font-size: 12.5px;
+    color: #b0b7c3;
+    line-height: 1.6;
+}
+/* 暗色适配 */
+:root[data-theme="dark"] .worldbook-card {
+    background: linear-gradient(180deg, rgba(28, 28, 30, 0.97), rgba(28, 28, 30, 0.9));
+    border-color: rgba(255, 255, 255, 0.06);
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.35);
+}
+:root[data-theme="dark"] .worldbook-card:active {
+    background: #26262a;
+}
+:root[data-theme="dark"] .worldbook-card-title {
+    color: #f2f2f7;
+}
+:root[data-theme="dark"] .worldbook-card-desc {
+    color: #98989d;
+}
+:root[data-theme="dark"] .worldbook-card-meta {
+    color: #6e6e73;
+}
+:root[data-theme="dark"] .wb-chip-more {
+    color: #98989d;
+    background: rgba(255, 255, 255, 0.07);
+    border-color: rgba(255, 255, 255, 0.1);
+}
+:root[data-theme="dark"] .wb-badge-case {
+    color: #8fa8dd;
+    background: rgba(120, 150, 220, 0.16);
+}
+:root[data-theme="dark"] .wb-badge-off {
+    color: #98989d;
+    background: rgba(255, 255, 255, 0.08);
+}
+:root[data-theme="dark"] .worldbook-empty i {
+    color: #3a3a3c;
+}
+:root[data-theme="dark"] .worldbook-empty p {
+    color: #98989d;
+}
+:root[data-theme="dark"] .worldbook-empty span {
+    color: #6e6e73;
+}
+:root[data-theme="dark"] .worldbook-arrow {
+    color: #48484a;
+}

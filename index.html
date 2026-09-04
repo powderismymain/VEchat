@@ -1290,15 +1290,63 @@
                 </button>
                 <span class="sub-title">提示词注入</span>
             </div>
-            <div class="prompt-category-tabs" id="prompt-category-tabs">
-                <button type="button" class="prompt-category-tab active" data-category="chat">聊天</button>
-                <button type="button" class="prompt-category-tab" data-category="proactive">主动</button>
-                <button type="button" class="prompt-category-tab" data-category="moments">朋友圈</button>
-                <button type="button" class="prompt-category-tab" data-category="call">通话</button>
-                <button type="button" class="prompt-category-tab" data-category="group">群聊</button>
-                <button type="button" class="prompt-category-tab" data-category="summary">总结</button>
-                <button type="button" class="prompt-category-tab" data-category="theater">小剧场</button>
-                <button type="button" class="prompt-category-tab" data-category="preview">预览</button>
+            <div class="prompt-menu-list">
+                <div class="prompt-menu-item" data-category="chat">
+                    <div class="prompt-menu-info">
+                        <div class="prompt-menu-title">聊天</div>
+                        <div class="prompt-menu-sub">全局系统提示词 · 入戏设定 / 活人味 / 输出协议 · 个性约束 · 线下模式附加</div>
+                    </div>
+                    <i class="fas fa-chevron-right prompt-menu-arrow"></i>
+                </div>
+                <div class="prompt-menu-item" data-category="proactive">
+                    <div class="prompt-menu-info">
+                        <div class="prompt-menu-title">主动</div>
+                        <div class="prompt-menu-sub">AI 主动来找你说话时的提示词</div>
+                    </div>
+                    <i class="fas fa-chevron-right prompt-menu-arrow"></i>
+                </div>
+                <div class="prompt-menu-item" data-category="moments">
+                    <div class="prompt-menu-info">
+                        <div class="prompt-menu-title">朋友圈</div>
+                        <div class="prompt-menu-sub">发动态 · 互动 · 回评 · NPC 社交 + 上下文参数</div>
+                    </div>
+                    <i class="fas fa-chevron-right prompt-menu-arrow"></i>
+                </div>
+                <div class="prompt-menu-item" data-category="call">
+                    <div class="prompt-menu-info">
+                        <div class="prompt-menu-title">通话</div>
+                        <div class="prompt-menu-sub">语音 / 视频通话与快捷接话提示词</div>
+                    </div>
+                    <i class="fas fa-chevron-right prompt-menu-arrow"></i>
+                </div>
+                <div class="prompt-menu-item" data-category="group">
+                    <div class="prompt-menu-info">
+                        <div class="prompt-menu-title">群聊</div>
+                        <div class="prompt-menu-sub">群聊互动实时注入 · 群聊线下模式附加</div>
+                    </div>
+                    <i class="fas fa-chevron-right prompt-menu-arrow"></i>
+                </div>
+                <div class="prompt-menu-item" data-category="summary">
+                    <div class="prompt-menu-info">
+                        <div class="prompt-menu-title">总结</div>
+                        <div class="prompt-menu-sub">小总结 / 大总结提示词（与总结设置同步）</div>
+                    </div>
+                    <i class="fas fa-chevron-right prompt-menu-arrow"></i>
+                </div>
+                <div class="prompt-menu-item" data-category="theater">
+                    <div class="prompt-menu-info">
+                        <div class="prompt-menu-title">小剧场</div>
+                        <div class="prompt-menu-sub">HTML + CSS 输出规范与排版约束</div>
+                    </div>
+                    <i class="fas fa-chevron-right prompt-menu-arrow"></i>
+                </div>
+                <div class="prompt-menu-item" data-category="preview">
+                    <div class="prompt-menu-info">
+                        <div class="prompt-menu-title">预览</div>
+                        <div class="prompt-menu-sub">最终注入预览 · 群聊实时显示 · 高级选项</div>
+                    </div>
+                    <i class="fas fa-chevron-right prompt-menu-arrow"></i>
+                </div>
             </div>
             <div class="prompt-form">
                 <!-- 提示词编辑 -->
@@ -1582,6 +1630,20 @@
                     <button class="btn-primary" id="save-prompt-btn">保存设置</button>
                 </div>
             </div>
+        </div>
+
+        <!-- 提示词详情页（二级导航，分类下的提示词折叠条目） -->
+        <div id="prompt-detail-page" class="page sub-page">
+            <div class="sub-header">
+                <button class="back-btn" id="prompt-detail-back-btn" aria-label="返回">
+                    <svg class="wx-icon" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M14.5 5.5 L8 12 L14.5 18.5"/>
+                    </svg>
+                </button>
+                <span class="sub-title" id="prompt-detail-title">提示词</span>
+                <span class="header-right-text-btn" style="visibility:hidden;"></span>
+            </div>
+            <div class="prompt-detail-body" id="prompt-detail-body"></div>
         </div>
 
         <!-- 朋友圈页面 -->

@@ -808,11 +808,11 @@
                     </div>
                     <div class="chat-manual-summary-box">
                         <div class="chat-manual-summary-range">
-                            <input type="number" id="group-chat-manual-summary-start" min="1" placeholder="起始条数">
+                            <input type="number" id="group-chat-manual-summary-start" min="1" placeholder="起始（默认1）">
                             <span>到</span>
-                            <input type="number" id="group-chat-manual-summary-end" min="1" placeholder="结束条数">
+                            <input type="number" id="group-chat-manual-summary-end" min="1" placeholder="结束（留空=全部）">
                         </div>
-                        <div class="chat-manual-summary-hint" id="group-chat-manual-summary-hint">按群聊消息条数编号，包含起止；会生成一条小总结，但不会删除聊天原文</div>
+                        <div class="chat-manual-summary-hint" id="group-chat-manual-summary-hint">按群聊消息条数编号，包含起止；会生成一条小总结，但不会删除聊天原文。起始/结束留空 = 默认总结全部未总结内容</div>
                         <button class="btn-primary chat-manual-summary-btn" id="group-chat-manual-summary-btn">手动小总结这段群聊</button>
                     </div>
                 </div>
@@ -2695,11 +2695,11 @@
                     </div>
                     <div class="chat-manual-summary-box">
                         <div class="chat-manual-summary-range">
-                            <input type="number" id="chat-manual-summary-start" min="1" placeholder="起始条数">
+                            <input type="number" id="chat-manual-summary-start" min="1" placeholder="起始（默认1）">
                             <span>到</span>
-                            <input type="number" id="chat-manual-summary-end" min="1" placeholder="结束条数">
+                            <input type="number" id="chat-manual-summary-end" min="1" placeholder="结束（留空=全部）">
                         </div>
-                        <div class="chat-manual-summary-hint" id="chat-manual-summary-hint">按聊天条数编号，包含起止；会生成一条小总结，但不会删除聊天原文</div>
+                        <div class="chat-manual-summary-hint" id="chat-manual-summary-hint">按聊天条数编号，包含起止；会生成一条小总结，但不会删除聊天原文。起始/结束留空 = 默认总结全部未总结内容</div>
                         <button class="btn-primary chat-manual-summary-btn" id="chat-manual-summary-btn">手动小总结这段对话</button>
                     </div>
                 </div>
@@ -3233,17 +3233,17 @@
                 <div class="form-group">
                     <label>触发总结阈值（条数）</label>
                     <input type="number" id="summary-threshold-input" placeholder="默认：500" min="1" max="9999">
-                    <div class="hint-text" style="margin-top: 5px;">当对话达到设定条数时，自动触发总结。</div>
+                    <div class="hint-text" style="margin-top: 5px;">当对话达到设定条数时，自动触发一次小总结（建议大于下方“保留最近上下文”，否则自动不会触发、只能手动总结）。</div>
                 </div>
                 <div class="form-group">
                     <label>保留最近上下文（条数）</label>
                     <input type="number" id="summary-keep-input" placeholder="默认：200" min="0" max="9999">
-                    <div class="hint-text" style="margin-top: 5px;">AI 仍直接读取最近多少条未归档消息；更早消息只保留给你查看，不再直接喂给 AI。</div>
+                    <div class="hint-text" style="margin-top: 5px;">自动总结时：只归档超过这个条数的更早消息，最近 keep 条继续保留给 AI 直读（当前对话不断片）。例：阈值 500、keep 200 → 到 500 时把更早的 300 条归档成小总结，最近 200 条留着继续聊；再积到 500 会再归档一批。keep 应小于阈值。</div>
               </div>
                 <div class="form-group">
                     <label>小总结最大字数</label>
-                    <input type="number" id="summary-mini-max-chars-input" placeholder="默认：360" min="80" max="4000">
-                    <div class="hint-text" style="margin-top: 5px;">小总结仍然保持私密记事本口吻，但会尽量精炼，不写太多口水话。</div>
+                    <input type="number" id="summary-mini-max-chars-input" placeholder="留空或 0 = 不限字数" min="0">
+                    <div class="hint-text" style="margin-top: 5px;">小总结仍然保持私密记事本口吻，但会尽量精炼，不写太多口水话。填 0 或留空则不限制字数，内容以完整为主。</div>
                 </div>
                 <div class="form-group">
                     <label>大总结触发所需小总结数</label>
@@ -3252,8 +3252,8 @@
                 </div>
                 <div class="form-group">
                     <label>大总结最大字数</label>
-                    <input type="number" id="summary-mega-max-chars-input" placeholder="默认：900" min="120" max="8000">
-                    <div class="hint-text" style="margin-top: 5px;">大总结会尽量全面吸收每一条小总结，但输出仍会被压缩到这个字数附近。</div>
+                    <input type="number" id="summary-mega-max-chars-input" placeholder="留空或 0 = 不限字数" min="0">
+                    <div class="hint-text" style="margin-top: 5px;">大总结会尽量全面吸收每一条小总结。填 0 或留空则不限制字数，重要信息尽量写全。</div>
               </div>
                 <div class="form-group">
                     <label>总结提示词</label>

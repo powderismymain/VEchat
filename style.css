@@ -13988,3 +13988,61 @@ button:focus-visible,
 :root[data-theme="dark"] .worldbook-arrow {
     color: #48484a;
 }
+
+/* 提示词详情页滚动修复：正文作为滚动容器 */
+#prompt-detail-page {
+    background-color: #ffffff;
+}
+#prompt-detail-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+}
+#prompt-detail-body .prompt-form {
+    flex: none;
+    min-height: auto;
+    overflow: visible;
+    padding: 12px 12px 96px;
+    background: transparent;
+}
+:root[data-theme="dark"] #prompt-detail-page {
+    background-color: #0f0f10;
+}
+:root[data-theme="dark"] #prompt-detail-body .prompt-form {
+    background: transparent;
+}
+
+/* 查看本轮提示词（prompt-trace）夜间可读性修复 */
+:root[data-theme="dark"] .prompt-trace-body {
+    color: #e5e5ea;
+}
+:root[data-theme="dark"] .prompt-trace-badge {
+    color: #d1d1d6;
+    background: rgba(255, 255, 255, 0.1);
+}
+:root[data-theme="dark"] .prompt-trace-lines {
+    color: #8e8e93;
+}
+:root[data-theme="dark"] .prompt-trace-head {
+    border-bottom-color: rgba(255, 255, 255, 0.07);
+}
+:root[data-theme="dark"] .prompt-trace-system {
+    background: rgba(28, 28, 30, 0.92);
+    border-color: rgba(89, 141, 196, 0.35);
+    border-left: 3px solid #4a86c8;
+}
+:root[data-theme="dark"] .prompt-trace-user {
+    background: rgba(28, 28, 30, 0.92);
+    border-color: rgba(7, 193, 96, 0.3);
+    border-left: 3px solid #2fbf71;
+}
+:root[data-theme="dark"] .prompt-trace-assistant {
+    background: rgba(28, 28, 30, 0.92);
+    border-color: rgba(230, 126, 34, 0.3);
+    border-left: 3px solid #e67e22;
+}
+:root[data-theme="dark"] #prompt-view-token-badge {
+    color: #8e8e93;
+}

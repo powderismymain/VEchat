@@ -1486,8 +1486,14 @@ const Storage = {
         }
         const keep = Math.max(0, parseInt((shouldMigrate ? defaultKeep : raw.keep) ?? defaultKeep, 10) || defaultKeep);
         const threshold = Math.max(1, parseInt((shouldMigrate ? defaultThreshold : raw.threshold) ?? defaultThreshold, 10) || defaultThreshold);
-        const miniMaxChars = Math.max(80, parseInt(raw.miniMaxChars ?? defaultMiniMaxChars, 10) || defaultMiniMaxChars);
-        const megaMaxChars = Math.max(120, parseInt(raw.megaMaxChars ?? defaultMegaMaxChars, 10) || defaultMegaMaxChars);
+        // 字数限制：0 或非法值 = 不限字数（留空/0 都不注入字数要求）
+        const normCharLimit = (rawValue, fallback) => {
+            if (rawValue == null) return fallback;
+            const n = parseInt(rawValue, 10);
+            return Number.isFinite(n) && n > 0 ? n : 0;
+        };
+        const miniMaxChars = normCharLimit(raw.miniMaxChars, defaultMiniMaxChars);
+        const megaMaxChars = normCharLimit(raw.megaMaxChars, defaultMegaMaxChars);
         const megaTriggerCount = Math.max(1, parseInt(raw.megaTriggerCount ?? defaultMegaTriggerCount, 10) || defaultMegaTriggerCount);
         const customPromptMini = replaceLegacyPromptVars(typeof raw.customPromptMini === 'string'
             ? raw.customPromptMini
@@ -10096,7 +10102,7 @@ function getSummaryBasePrompt(target, kind = 'mini') {
                 group_name: getSessionDisplayName(session),
                 group_members: memberList || '暂无其他成员',
                 summary_kind: kind === 'mega' ? '群聊大总结' : '群聊小总结',
-                summary_max_chars: kind === 'mega' ? (config.megaMaxChars || 900) : (config.miniMaxChars || 360),
+                summary_max_chars: (() => { const cc = resolveSummaryCharLimit(kind, config); return cc.value > 0 ? cc.value : '不限'; })(),
                 mega_trigger_count: config.megaTriggerCount || 10
             })
         };
@@ -10111,16 +10117,29 @@ function getSummaryBasePrompt(target, kind = 'mini') {
     }
     return renderPromptTemplate(promptText, getScenarioPromptVars(target, {
         summary_kind: kind === 'mega' ? '大总结' : '小总结',
-        summary_max_chars: kind === 'mega' ? (config.megaMaxChars || 900) : (config.miniMaxChars || 360),
+        summary_max_chars: (() => { const cc = resolveSummaryCharLimit(kind, config); return cc.value > 0 ? cc.value : '不限'; })(),
         mega_trigger_count: config.megaTriggerCount || 10
     }));
 }
+
+function resolveSummaryCharLimit(kind, config) {
+    const cfg = config || State.summaryConfig || {};
+    const raw = kind === 'mega' ? cfg.megaMaxChars : cfg.miniMaxChars;
+    const fallback = kind === 'mega' ? 900 : 360;
+    if (raw == null) return { value: fallback, note: '尽量控制在 ' + fallback + ' 字附近' };
+    const n = parseInt(raw, 10);
+    const value = Number.isFinite(n) && n > 0 ? n : 0;
+    return { value, note: value > 0 ? '尽量控制在 ' + value + ' 字附近' : '不限制字数，以内容完整全面为主，重要信息尽量写全，允许写得更长' };
+}
+
 
 function buildMiniSummaryPromptText(basePrompt, previousMemory, newChatText) {
     const config = State.summaryConfig || Storage.getSummaryConfig();
     const prev = String(previousMemory || '').trim();
     const next = String(newChatText || '').trim();
-    const maxChars = Math.max(80, parseInt(config.miniMaxChars ?? 360, 10) || 360);
+    const charCfg = resolveSummaryCharLimit('mini', config);
+    const maxChars = charCfg.value;
+    const charNote = charCfg.note;
     if (prev) {
         return prependUnrestrictedPrompt(`${basePrompt}
 
@@ -10134,7 +10153,7 @@ ${next}
 以下内容里的“我”都固定指 {char}，另一方统一按 {user} 来写，不要写成 ta 或别的代称。
 直接输出记事内容，不要写“好的，这是为你整理的私密记事本”“下面是总结”这类开场白。
 尽量把每条重要记忆落到具体时间点或时间段上，方便后面的大总结整理时间线。
-这次是小总结，内容要精炼，尽量控制在 ${maxChars} 字附近，不要写口水话，不要重复。`);
+这次是小总结，${charNote}，不要写口水话，不要重复。`);
     }
     return prependUnrestrictedPrompt(`${basePrompt}
 
@@ -10145,14 +10164,16 @@ ${next}
 以下内容里的“我”都固定指 {char}，另一方统一按 {user} 来写，不要写成 ta 或别的代称。
 直接输出记事内容，不要写“好的，这是为你整理的私密记事本”“下面是总结”这类开场白。
 尽量把每条重要记忆落到具体时间点或时间段上，方便后面的大总结整理时间线。
-内容尽量精炼，优先保留以后真有用的信息，尽量控制在 ${maxChars} 字附近。`);
+内容尽量精炼，优先保留以后真有用的信息，${charNote}。`);
 }
 
 function buildMegaSummaryPromptText(basePrompt, previousMegaMemory, summaryText, options = {}) {
     const config = State.summaryConfig || Storage.getSummaryConfig();
     const prev = String(previousMegaMemory || '').trim();
     const next = String(summaryText || '').trim();
-    const maxChars = Math.max(120, parseInt(config.megaMaxChars ?? 900, 10) || 900);
+    const charCfg = resolveSummaryCharLimit('mega', config);
+    const maxChars = charCfg.value;
+    const charNote = charCfg.note;
     const summaryCount = Math.max(1, parseInt(options.summaryCount ?? 0, 10) || 1);
     if (prev) {
         return prependUnrestrictedPrompt(`${basePrompt}
@@ -10167,7 +10188,7 @@ ${next}
 总结必须全面、精准、去重、理顺时间线，不能漏掉关键关系变化、状态变化、偏好、雷点、约定、冲突和教训。
 以下内容里的“我”都固定指 {char}，另一方统一按 {user} 来写，不要写成 ta 或别的代称。
 直接输出记事内容，不要写“好的，这是为你整理的私密记事本”“下面是总结”这类开场白。
-输出继续保持私密记事本口吻，尽量控制在 ${maxChars} 字附近。`);
+输出继续保持私密记事本口吻，${charNote}。`);
     }
     return prependUnrestrictedPrompt(`${basePrompt}
 
@@ -10178,7 +10199,7 @@ ${next}
 总结必须全面、精准、去重，不能漏掉关键关系变化、状态变化、偏好、雷点、约定、冲突和教训。
 以下内容里的“我”都固定指 {char}，另一方统一按 {user} 来写，不要写成 ta 或别的代称。
 直接输出记事内容，不要写“好的，这是为你整理的私密记事本”“下面是总结”这类开场白。
-输出继续保持私密记事本口吻，尽量控制在 ${maxChars} 字附近。`);
+输出继续保持私密记事本口吻，${charNote}。`);
 }
 
 function buildTextParagraphBatches(lines, options = {}) {
@@ -12518,9 +12539,9 @@ function initDiscoverPage() {
         document.getElementById('summary-model-input').value = State.summaryConfig.model || '';
         document.getElementById('summary-threshold-input').value = State.summaryConfig.threshold || 300;
         document.getElementById('summary-keep-input').value = State.summaryConfig.keep || 100;
-        document.getElementById('summary-mini-max-chars-input').value = State.summaryConfig.miniMaxChars || 360;
+        document.getElementById('summary-mini-max-chars-input').value = State.summaryConfig.miniMaxChars > 0 ? State.summaryConfig.miniMaxChars : '';
         document.getElementById('summary-mega-trigger-input').value = State.summaryConfig.megaTriggerCount || 10;
-        document.getElementById('summary-mega-max-chars-input').value = State.summaryConfig.megaMaxChars || 900;
+        document.getElementById('summary-mega-max-chars-input').value = State.summaryConfig.megaMaxChars > 0 ? State.summaryConfig.megaMaxChars : '';
 
         const autoSummaryToggle = document.getElementById('auto-summary-toggle');
         const autoMegaSummaryToggle = document.getElementById('auto-mega-summary-toggle');
@@ -12575,9 +12596,13 @@ function initDiscoverPage() {
     document.getElementById('save-summary-settings-btn')?.addEventListener('click', () => {
         const keep = Math.max(0, parseInt(document.getElementById('summary-keep-input').value, 10) || 200);
         const threshold = Math.max(1, parseInt(document.getElementById('summary-threshold-input').value, 10) || 500);
-        const miniMaxChars = Math.max(80, parseInt(document.getElementById('summary-mini-max-chars-input').value, 10) || 360);
+        const autoEnabled = document.getElementById('auto-summary-toggle')?.classList.contains('active') || false;
+        if (autoEnabled && keep >= threshold) {
+            showToast('提示：保留上下文应小于触发阈值，否则自动小总结不会触发（只会由手动触发）');
+        }
+        const miniMaxChars = (() => { const v = String(document.getElementById('summary-mini-max-chars-input').value || '').trim(); if (v === '') return 0; const n = parseInt(v, 10); return Number.isFinite(n) && n > 0 ? n : 0; })();
         const megaTriggerCount = Math.max(1, parseInt(document.getElementById('summary-mega-trigger-input').value, 10) || 10);
-        const megaMaxChars = Math.max(120, parseInt(document.getElementById('summary-mega-max-chars-input').value, 10) || 900);
+        const megaMaxChars = (() => { const v = String(document.getElementById('summary-mega-max-chars-input').value || '').trim(); if (v === '') return 0; const n = parseInt(v, 10); return Number.isFinite(n) && n > 0 ? n : 0; })();
         const useMain = document.getElementById('summary-use-main-toggle')?.classList.contains('active') || false;
         const mainApiId = String(document.getElementById('summary-main-select')?.value || 'current').trim() || 'current';
         const apiUrl = document.getElementById('summary-url-input').value.trim();
@@ -25430,9 +25455,13 @@ async function triggerManualSummary(contact, startIndex, endIndex) {
         showToast('当前没有可总结的聊天内容');
         return;
     }
-    const start = Math.max(1, parseInt(startIndex, 10) || 0);
-    const end = Math.max(1, parseInt(endIndex, 10) || 0);
-    if (start > end) {
+    const rawStartStr = String(startIndex ?? '').trim();
+    const rawEndStr = String(endIndex ?? '').trim();
+    const start = (rawStartStr === '' || rawStartStr === '0') ? 1 : Math.max(1, parseInt(rawStartStr, 10) || 1);
+    const end = (rawEndStr === '' || rawEndStr === '0') ? total : Math.max(1, parseInt(rawEndStr, 10) || 1);
+    if ((rawStartStr !== '' && rawStartStr !== '0') && (rawEndStr === '' || rawEndStr === '0')) {
+        // 只填了起始、结束留空 → 默认到全部
+    } else if (start > end) {
         showToast('起始条数不能大于结束条数');
         return;
     }

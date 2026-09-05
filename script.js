@@ -9383,7 +9383,10 @@ async function runGroupAiReply(session, options = {}) {
             if (String(State.currentSessionId || '') === sid) showToast('已中断');
             return;
         }
-        throw e;
+        if (!options.silent) {
+            showModelErrorDialog('群聊回复失败', normalizeModelErrorText(e));
+        }
+        return;
     } finally {
         clearAiTaskForSession(sid, controller);
         if (String(State.currentSessionId || '') === String(session.id || '')) {
@@ -9427,7 +9430,20 @@ async function fetchGroupAIResponse(session, member, options = {}) {
             body: JSON.stringify(payload)
         });
         if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
+            let errMsg = `HTTP ${response.status}`;
+            try {
+                const errText = await response.text();
+                if (errText) {
+                    try {
+                        const errData = JSON.parse(errText);
+                        errMsg = String(errData?.error?.message || errData?.error || errData?.message || errText).trim();
+                    } catch (e2) {
+                        errMsg = errText.trim();
+                    }
+                }
+            } catch (e) {
+            }
+            throw new Error(errMsg);
         }
         const data = await response.json();
         const reply = String(
@@ -10072,14 +10088,14 @@ function parseSummaryApiError(rawText, status = 0) {
         if (msg) return String(msg).trim();
     } catch (e) {
     }
-    return raw.replace(/\s+/g, ' ').trim().slice(0, 160) || (status ? `接口返回错误（HTTP ${status}）` : '接口返回错误');
+    return raw.replace(/\s+/g, ' ').trim().slice(0, 4000) || (status ? `接口返回错误（HTTP ${status}）` : '接口返回错误');
 }
 
 function formatSummaryFailure(err, fallback = '网络或接口错误') {
     const msg = String(err?.message || '').trim();
     if (!msg || msg === 'SUMMARY_REQUEST_FAILED') return fallback;
     if (msg === 'SUMMARY_CONFIG_INCOMPLETE') return '总结API未配置完整';
-    return msg.slice(0, 160);
+    return msg.slice(0, 4000);
 }
 
 function getSummaryBasePrompt(target, kind = 'mini') {
@@ -16799,7 +16815,7 @@ async function runContactMomentsAutoReply(contactId) {
             `本轮共回复 ${replied} 条评论`
         );
     } catch (e) {
-        showToast('回复失败：请检查API设置');
+        showModelErrorDialog('回复失败', normalizeModelErrorText(e));
     } finally {
         delete State.pendingMomentReplyJobs[id];
         endNativeAiGeneration(nativeTaskToken);
@@ -19718,6 +19734,14 @@ function openTheaterPage(contact) {
     refreshTheaterWorldbookStatus(contact);
     renderTheaterFeed(contact);
     showPage('theater-page');
+    // 如果离开页面时生成仍在后台继续，回到小剧场页恢复“生成中”提示
+    if (State.theaterBusy?.[contact.id]) {
+        const feed = document.getElementById('theater-feed');
+        if (feed && !feed.querySelector('.theater-generating')) {
+            feed.prepend(buildTheaterLoadingEl(false));
+            feed.scrollTop = feed.scrollHeight;
+        }
+    }
     setTimeout(() => document.getElementById('theater-input')?.focus(), 80);
 }
 
@@ -19749,7 +19773,27 @@ function setTheaterBusy(contactId, busy) {
     if (valueSelect) valueSelect.disabled = !!busy;
 }
 
+function buildTheaterLoadingEl(regenerate) {
+    const el = document.createElement('div');
+    el.className = 'theater-generating';
+    el.innerHTML = `<span class="theater-generating-orb"><i class="fas fa-theater-masks"></i></span><div><strong>${regenerate ? '正在重新生成' : '正在搭建小剧场'}</strong><span>${escapeHtml(getTheaterApiLabel(getTheaterSelectedApiConfig()))} · 可点击底部“停止”中断</span></div>`;
+    return el;
+}
+
 async function requestTheaterWork(contact, request, config, signal) {
+    // 网络抖动/偶发失败自动重试一次（用户离开页面后仍继续，不会打断）
+    for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+            return await requestTheaterWorkOnce(contact, request, config, signal);
+        } catch (err) {
+            if (err?.name === 'AbortError' || attempt >= 1) throw err;
+            await new Promise((resolve) => setTimeout(resolve, 1400));
+        }
+    }
+    throw new Error('小剧场生成失败');
+}
+
+async function requestTheaterWorkOnce(contact, request, config, signal) {
     const selectedApiConfig = getTheaterSelectedApiConfig();
     const runtime = selectedApiConfig ? resolveChatApiRuntimeFromConfigLike(selectedApiConfig) : null;
     if (!runtime?.targetUrl || (!runtime.useProxy && !runtime.apiKey)) throw new Error('请先在 API 设置里完成当前方案配置');
@@ -20114,9 +20158,7 @@ function bindTheaterEvents() {
         State.theaterAbortControllers[contact.id] = controller;
         setTheaterBusy(contact.id, true);
         const feed = document.getElementById('theater-feed');
-        const loading = document.createElement('div');
-        loading.className = 'theater-generating';
-        loading.innerHTML = `<span class="theater-generating-orb"><i class="fas fa-theater-masks"></i></span><div><strong>${regenerateRecord ? '正在重新生成' : '正在搭建小剧场'}</strong><span>${escapeHtml(getTheaterApiLabel(getTheaterSelectedApiConfig()))} · 可点击底部“停止”中断</span></div>`;
+        const loading = buildTheaterLoadingEl(!!regenerateRecord);
         feed?.appendChild(loading);
         if (feed) feed.scrollTop = feed.scrollHeight;
         try {
@@ -20145,7 +20187,7 @@ function bindTheaterEvents() {
             showNativeAiReplyNotification(`${getContactDisplayName(contact)} · 小剧场`, `“${request.slice(0, 80)}”已经生成完成，点按返回查看。`);
         } catch (error) {
             if (error?.name === 'AbortError') showToast('已停止生成');
-            else showToast(`小剧场生成失败：${String(error?.message || error)}`, 3200);
+            else showModelErrorDialog('小剧场生成失败', normalizeModelErrorText(error));
         } finally {
             delete State.theaterAbortControllers[contact.id];
             setTheaterBusy(contact.id, false);
@@ -22593,11 +22635,7 @@ function bindChatEvents() {
             return;
         }
         if (plusPanel) plusPanel.classList.remove('show');
-        try {
-            await runAiReplyForContact(contact, buildManualAiReplyOptions(contact));
-        } catch (error) {
-            addSystemMessage('批量回复失败，请检查API设置');
-        }
+        await runAiReplyForContact(contact, buildManualAiReplyOptions(contact));
     });
 
     document.getElementById('plus-offline-mode-btn')?.addEventListener('click', () => {
@@ -24464,7 +24502,10 @@ async function runAiReplyForContact(contact, options = {}) {
             if (String(State.currentContactId || '') === cid) showToast('已中断');
             return;
         }
-        throw e;
+        if (!nextOptions.silent) {
+            showModelErrorDialog('AI 回复失败', normalizeModelErrorText(e));
+        }
+        return;
     } finally {
         clearAiTaskForSession(cid, controller);
     }
@@ -25524,7 +25565,7 @@ async function triggerManualSummary(contact, startIndex, endIndex) {
             await WeChatUI.showAlert('手动小总结完成', `已在「${getEntityDisplayName(contact)}」下保存第 ${start}-${end} 条对话的小总结。\n如需向量化，请手动点击右上角“向量化”。`);
         } catch (err) {
             console.error('手动小总结失败:', err);
-            await WeChatUI.showAlert('手动小总结失败', formatSummaryFailure(err));
+            showModelErrorDialog('手动小总结失败', normalizeModelErrorText(err));
         } finally {
             State.summaryBusy[contact.id] = false;
             refreshSummaryRelatedUi(contact.id);
@@ -25804,7 +25845,7 @@ async function triggerManualMegaSummary(contact, countInput) {
         await WeChatUI.showAlert('手动大总结完成', `已在当前页生成 1 条大总结，并吸收最近 ${picked.length} 条小总结。\n如需向量化，请手动点击右上角“向量化”。`);
     } catch (err) {
         console.error('手动大总结失败:', err);
-        await WeChatUI.showAlert('手动大总结失败', formatSummaryFailure(err));
+        showModelErrorDialog('手动大总结失败', normalizeModelErrorText(err));
     } finally {
         State.summaryBusy[contact.id] = false;
         refreshSummaryRelatedUi(contact.id);
@@ -25960,6 +26001,34 @@ async function redoMegaSummary(contact, megaSummaryId) {
         State.summaryBusy[contact.id] = false;
         refreshSummaryRelatedUi(contact.id);
     }
+}
+
+function releaseMessagesCoveredByMini(contactId, summaryItem) {
+    if (!summaryItem || typeof summaryItem !== 'object') return;
+    const id = String(contactId || '').trim();
+    const itemId = String(summaryItem.id || '').trim();
+    if (!id || !itemId) return;
+    const history = Array.isArray(State.chatHistories?.[id]) ? State.chatHistories[id] : [];
+    if (history.length === 0) return;
+    let changed = false;
+    const releaseOne = (m) => {
+        if (!m || typeof m !== 'object') return;
+        if (String(m.summaryMiniId || '').trim() !== itemId) return;
+        delete m.summaryMiniId;
+        delete m.archivedAt;
+        if ('archivedForAi' in m) m.archivedForAi = false;
+        changed = true;
+    };
+    history.forEach(releaseOne);
+    // 极老版本可能只在总结条目里存了范围/来源 key，消息上没有 summaryMiniId → 按条目范围补一轮
+    if (!changed) {
+        const list = getMessagesForMiniSummaryRedo(id, summaryItem);
+        list.forEach((m) => {
+            const mi = m?._historyIndex;
+            if (Number.isInteger(mi) && history[mi]) releaseOne(history[mi]);
+        });
+    }
+    if (changed) Storage.saveChatHistories(State.chatHistories);
 }
 
 async function deleteMegaSummary(contactId, megaId) {
@@ -27862,6 +27931,8 @@ function loadMemoryView(target) {
                 }
                 const ok = await WeChatUI.showConfirm('删除小总结', '确定删除这条小总结吗？', '删除', '取消', true);
                 if (!ok) return;
+                // 先把这条总结覆盖过的消息解除“已总结”状态，让同一段内容可以重新手动总结
+                releaseMessagesCoveredByMini(target.id, summaryItem);
                 store.mini.splice(idx, 1);
                 Storage.saveSummaryHistories(State.summaryHistories);
                 removeSummaryVectorsByItems(target.id, [summaryItem]);
@@ -29607,3 +29678,85 @@ function ensurePromptRowsDecorated() {
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run, { once: true });
     else run();
 })();
+
+
+// 自愈：清理“总结已不存在但消息仍带 summaryMiniId/archivedForAi”的孤儿标记
+// （旧版删除总结时未还原消息导致同段无法重新手动总结）
+function repairOrphanSummaryMarkers() {
+    if (repairOrphanSummaryMarkers._done) return;
+    repairOrphanSummaryMarkers._done = true;
+    try {
+        const histories = State.chatHistories || {};
+        let anyChanged = false;
+        Object.keys(histories).forEach((contactId) => {
+            const list = Array.isArray(histories[contactId]) ? histories[contactId] : [];
+            if (!list.length) return;
+            let storeIds = null;
+            const miniIds = () => {
+                if (!storeIds) {
+                    try {
+                        const store = ensureSummaryStore(contactId);
+                        storeIds = new Set((Array.isArray(store.mini) ? store.mini : []).map((m) => String(m?.id || '').trim()).filter(Boolean));
+                    } catch (e) { storeIds = new Set(); }
+                }
+                return storeIds;
+            };
+            let changed = false;
+            list.forEach((m) => {
+                if (!m || typeof m !== 'object') return;
+                const marker = String(m.summaryMiniId || '').trim();
+                if (!marker) return;
+                if (miniIds().has(marker)) return;
+                delete m.summaryMiniId;
+                delete m.archivedAt;
+                if ('archivedForAi' in m) m.archivedForAi = false;
+                changed = true;
+            });
+            if (changed) { anyChanged = true; histories[contactId] = list; }
+        });
+        if (anyChanged) Storage.saveChatHistories(State.chatHistories);
+    } catch (e) { /* ignore */ }
+}
+
+(function scheduleOrphanRepair() {
+    const run = () => setTimeout(repairOrphanSummaryMarkers, 1200);
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run, { once: true });
+    else run();
+})();
+
+
+// ============================================================
+// 模型/接口报错：红色提示框，完整显示原因
+// ============================================================
+function normalizeModelErrorText(err) {
+    let text = '';
+    try {
+        text = String((err && err.message) || err || '').trim();
+    } catch (e) { text = ''; }
+    return text || '未知错误';
+}
+
+function showModelErrorDialog(title, message) {
+    const existing = document.getElementById('vx-model-error-dialog');
+    if (existing) existing.remove();
+    const text = String(message || '').trim() || '未知错误';
+    const modal = document.createElement('div');
+    modal.id = 'vx-model-error-dialog';
+    modal.className = 'modal wechat-dialog-modal show vx-model-error-modal';
+    modal.style.zIndex = String(CONSTANTS?.ZINDEX?.IMAGE_PREVIEW || 9000);
+    modal.innerHTML = `
+        <div class="modal-overlay"></div>
+        <div class="wechat-dialog vx-model-error-dialog">
+            <div class="vx-model-error-icon"><i class="fas fa-circle-exclamation"></i></div>
+            <div class="vx-model-error-title">${escapeHtml(String(title || '接口报错'))}</div>
+            <div class="vx-model-error-body"><pre class="vx-model-error-text">${escapeHtml(text)}</pre></div>
+            <div class="wechat-dialog-footer">
+                <button class="wechat-dialog-btn vx-model-error-close" type="button">知道了</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+    const close = () => modal.remove();
+    modal.querySelector('.modal-overlay')?.addEventListener('click', close);
+    modal.querySelector('.vx-model-error-close')?.addEventListener('click', close);
+}

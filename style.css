@@ -14046,3 +14046,63 @@ button:focus-visible,
 :root[data-theme="dark"] #prompt-view-token-badge {
     color: #8e8e93;
 }
+
+/* 模型/接口报错红色弹窗 */
+.vx-model-error-dialog {
+    width: min(86vw, 360px);
+    border-radius: 16px;
+}
+.vx-model-error-icon {
+    text-align: center;
+    margin-top: 20px;
+    color: #fa5151;
+    font-size: 30px;
+}
+.vx-model-error-title {
+    text-align: center;
+    font-size: 16px;
+    font-weight: 700;
+    color: #c0392b;
+    margin: 6px 0 10px;
+}
+.vx-model-error-body {
+    margin: 0 16px;
+    max-height: 42vh;
+    overflow-y: auto;
+    border-radius: 10px;
+    background: #fdf1f0;
+    border: 0.5px solid #f5c6c0;
+}
+.vx-model-error-text {
+    margin: 0;
+    padding: 10px 12px;
+    font-family: Consolas, "SFMono-Regular", monospace;
+    font-size: 12px;
+    line-height: 1.65;
+    white-space: pre-wrap;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    color: #a93226;
+}
+.vx-model-error-dialog .wechat-dialog-footer {
+    justify-content: center;
+}
+.vx-model-error-close {
+    color: #ffffff !important;
+    background: #e74c3c;
+    border-radius: 999px;
+    width: 120px;
+}
+.vx-model-error-close:active {
+    background: #c0392b;
+}
+:root[data-theme="dark"] .vx-model-error-title {
+    color: #ff8a80;
+}
+:root[data-theme="dark"] .vx-model-error-body {
+    background: rgba(233, 30, 99, 0.08);
+    border-color: rgba(244, 143, 143, 0.3);
+}
+:root[data-theme="dark"] .vx-model-error-text {
+    color: #ffb4aa;
+}
